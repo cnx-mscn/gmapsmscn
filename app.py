@@ -11,7 +11,7 @@ st.set_page_config("Montaj Rota Planlayıcı", layout="wide")
 st.title("🛠️ Montaj Rota Planlayıcı ve Maliyet Hesaplayıcı")
 
 # Google Maps API Anahtarınızı buraya girin
-api_key = "YOUR_GOOGLE_MAPS_API_KEY"  # API Anahtarınızı buraya ekleyin
+api_key = "AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws"  # API Anahtarınızı buraya ekleyin
 gmaps = googlemaps.Client(key=api_key)
 
 sehir_koordinatlari = {
