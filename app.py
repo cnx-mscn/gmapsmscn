@@ -128,3 +128,14 @@ if st.session_state.girisler:
 
 else:
     st.info("Henüz şehir girilmedi.")
+    try:
+    directions = gmaps.directions(konum1, konum2, mode="driving", alternatives=False)
+    if directions:
+        st.write(directions)  # Yanıtı yazdırarak görsel çıktı alabilirsiniz
+    else:
+        st.error("Rota bulunamadı.")
+except googlemaps.exceptions.ApiError as e:
+    st.error(f"API Hatası: {e}")
+except Exception as ex:
+    st.error(f"Beklenmeyen bir hata oluştu: {ex}")
+
