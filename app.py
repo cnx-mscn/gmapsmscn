@@ -3,6 +3,7 @@ import googlemaps
 import folium
 from streamlit_folium import st_folium
 from datetime import timedelta
+from haversine import haversine
 
 # Google Maps API Anahtarınızı girin
 gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
@@ -90,7 +91,6 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     if siralama_tipi == "Önem Derecesi":
         sehirler.sort(key=lambda x: x["onem"], reverse=True)
     else:  # En kısa rota (basit nearest neighbor)
-        from haversine import haversine
         rota = []
         current = baslangic
         while sehirler:
