@@ -91,92 +91,84 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     baslangic = st.session_state.baslangic_konum
     sehirler = st.session_state.sehirler.copy()
 
-    # Rota sıralama
-    if siralama_tipi == "Önem Derecesi":
-        sehirler.sort(key=lambda x: x["onem"], reverse=True)
-    else:  # En kısa rota (basit nearest neighbor)
-        rota = []
-        current = baslangic
-        while sehirler:
-            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])) )
-            rota.append(en_yakin)
-            current = en_yakin["konum"]
-            sehirler.remove(en_yakin)
-        sehirler = rota
-
-    # Harita
-    harita = folium.Map(location=[baslangic["lat"], baslangic["lng"]], zoom_start=6)
+    # En Düşük Maliyetli Rota Hesaplama
+    rota = [baslangic]
     toplam_km = 0
     toplam_sure = 0
     toplam_iscilik = 0
     toplam_yakit = 0
+    toplam_maliyet = 0
 
-    konumlar = [baslangic] + [s["konum"] for s in sehirler]
-    for i in range(len(konumlar) - 1):
+    while sehirler:
+        # En yakın şehri seç
+        en_yakin_sehir = min(sehirler, key=lambda s: haversine(
+            (rota[-1]["lat"], rota[-1]["lng"]), (s["konum"]["lat"], s["konum"]["lng"])))
+        
+        # Gidiş yolu mesafesi ve süre
         yol = gmaps.directions(
-            (konumlar[i]["lat"], konumlar[i]["lng"]),
-            (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]),
+            (rota[-1]["lat"], rota[-1]["lng"]),
+            (en_yakin_sehir["konum"]["lat"], en_yakin_sehir["konum"]["lng"]),
             mode="driving"
         )
         if yol:
             km = yol[0]["legs"][0]["distance"]["value"] / 1000
             sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60
+            yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
+            montaj_suresi = en_yakin_sehir["is_suresi"] * SAATLIK_ISCILIK
+
             toplam_km += km
             toplam_sure += sure_dk
-            yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
             toplam_yakit += yakit_maliyeti
-            montaj_suresi = st.session_state.sehirler[i]["is_suresi"]
-            toplam_iscilik += montaj_suresi * SAATLIK_ISCILIK
+            toplam_iscilik += montaj_suresi
 
-            # PolyLine: yol çizgisi
-            folium.PolyLine(
-                locations=[(konumlar[i]["lat"], konumlar[i]["lng"]), (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"])],
-                color="blue", weight=2.5, opacity=1
-            ).add_to(harita)
+            rota.append(en_yakin_sehir["konum"])  # Şehri rotaya ekle
+            sehirler.remove(en_yakin_sehir)
 
-            # Marker: şehir yerini işaretle ve yol bilgisi ekle
-            folium.Marker(
-                location=[konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]],
-                popup=f"{i+1}. {st.session_state.sehirler[i]['sehir']}",
-                tooltip=f"{i+1}. {st.session_state.sehirler[i]['sehir']} - {round(km)} km, {round(sure_dk)} dk"
-            ).add_to(harita)
+    # Dönüş yolunu ekle
+    yol = gmaps.directions(
+        (rota[-1]["lat"], rota[-1]["lng"]),
+        (baslangic["lat"], baslangic["lng"]),
+        mode="driving"
+    )
+    if yol:
+        km = yol[0]["legs"][0]["distance"]["value"] / 1000
+        sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60
+        yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
+        montaj_suresi = SAATLIK_ISCILIK  # Başlangıca dönüş için işçilik
 
-            # Yol üzerine km ve süre bilgisi ekle
-            yol_punkturu = [(konumlar[i]["lat"], konumlar[i]["lng"]), (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"])]
-            folium.Marker(
-                location=[(konumlar[i]["lat"] + konumlar[i + 1]["lat"]) / 2, (konumlar[i]["lng"] + konumlar[i + 1]["lng"]) / 2],
-                icon=folium.DivIcon(html=f"<div>{round(km)} km<br>{round(sure_dk)} dk</div>")
-            ).add_to(harita)
+        toplam_km += km
+        toplam_sure += sure_dk
+        toplam_yakit += yakit_maliyeti
+        toplam_iscilik += montaj_suresi
 
     toplam_sure_td = timedelta(minutes=toplam_sure)
     toplam_maliyet = toplam_yakit + toplam_iscilik
+
+    # Harita
+    harita = folium.Map(location=[baslangic["lat"], baslangic["lng"]], zoom_start=6)
+    for i in range(len(rota) - 1):
+        folium.PolyLine(
+            locations=[(rota[i]["lat"], rota[i]["lng"]), (rota[i + 1]["lat"], rota[i + 1]["lng"])],
+            color="blue", weight=2.5, opacity=1
+        ).add_to(harita)
+        
+    folium.Marker(
+        location=[baslangic["lat"], baslangic["lng"]],
+        popup="Başlangıç Noktası",
+        icon=folium.Icon(color="green")
+    ).add_to(harita)
+
+    for i, sehir in enumerate(st.session_state.sehirler):
+        folium.Marker(
+            location=[sehir["konum"]["lat"], sehir["konum"]["lng"]],
+            popup=sehir["sehir"]
+        ).add_to(harita)
 
     st.subheader("🗺️ Rota Haritası")
     st_folium(harita, width=1000, height=600)
 
     st.markdown("---")
     st.subheader("📊 Rota Özeti")
-    for i, sehir in enumerate(st.session_state.sehirler):
-        sehir_km = gmaps.directions(
-            (baslangic["lat"], baslangic["lng"]),
-            (sehir["konum"]["lat"], sehir["konum"]["lng"]),
-            mode="driving"
-        )[0]["legs"][0]["distance"]["value"] / 1000
-        sehir_sure = gmaps.directions(
-            (baslangic["lat"], baslangic["lng"]),
-            (sehir["konum"]["lat"], sehir["konum"]["lng"]),
-            mode="driving"
-        )[0]["legs"][0]["duration"]["value"] / 60
-        sehir_yakit = sehir_km * km_basi_tuketim * benzin_fiyati
-        sehir_iscilik = sehir["is_suresi"] * SAATLIK_ISCILIK
-
-        st.markdown(f"**{sehir['sehir']}**")
-        st.markdown(f"  - **Mesafe**: {round(sehir_km)} km")
-        st.markdown(f"  - **Süre**: {round(sehir_sure)} dk")
-        st.markdown(f"  - **Yakıt Maliyeti**: {round(sehir_yakit)} TL")
-        st.markdown(f"  - **İşçilik Maliyeti**: {round(sehir_iscilik)} TL")
-
-    st.markdown("---")
     st.markdown(f"**Toplam Mesafe**: {round(toplam_km, 1)} km")
     st.markdown(f"**Toplam Süre**: {toplam_sure_td}")
     st.markdown(f"**Toplam Yakıt Maliyeti**: {round(toplam_yakit)} TL")
