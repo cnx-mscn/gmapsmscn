@@ -1,150 +1,151 @@
 import streamlit as st
-import googlemaps
 import folium
+from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
-from datetime import timedelta
 from haversine import haversine
 
-# Google Maps API Anahtarınızı girin
-gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
-
-st.set_page_config("Montaj Rota Planlayıcı", layout="wide")
+st.set_page_config(page_title="Montaj Rota Planlayıcı", layout="wide")
 st.title("🛠️ Montaj Rota Planlayıcı")
 
-# GLOBAL Sabitler
-SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", min_value=100, value=500, step=50)
-benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/L)", min_value=0.1, value=10.0, step=0.1)
-km_basi_tuketim = st.sidebar.number_input("Km Başına Tüketim (L/km)", min_value=0.01, value=0.1, step=0.01)
-siralama_tipi = st.sidebar.radio("Rota Sıralama Tipi", ["Önem Derecesi", "En Kısa Rota"])
+# Sidebar ayarları
+st.sidebar.header("🔧 Ayarlar")
 
-# Session Init
-if "ekipler" not in st.session_state:
-    st.session_state.ekipler = {}
-if "aktif_ekip" not in st.session_state:
-    st.session_state.aktif_ekip = None
-if "sehirler" not in st.session_state:
-    st.session_state.sehirler = []
-if "baslangic_konum" not in st.session_state:
-    st.session_state.baslangic_konum = None
+baslangic_noktasi = st.sidebar.text_input("Başlangıç Noktası (Şehir)", "Gebze")
+SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", min_value=100, value=500)
+benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/Litre)", min_value=1.0, value=43.0)
+km_basi_tuketim = st.sidebar.number_input("Araç Tüketimi (Litre/km)", min_value=0.01, value=0.10)
 
-# Ekip Yönetimi
-st.sidebar.subheader("👷 Ekip Yönetimi")
-ekip_adi = st.sidebar.text_input("Yeni Ekip Adı")
-if st.sidebar.button("➕ Ekip Oluştur") and ekip_adi:
-    if ekip_adi not in st.session_state.ekipler:
-        st.session_state.ekipler[ekip_adi] = {"members": []}
-        st.session_state.aktif_ekip = ekip_adi
-aktif_secim = st.sidebar.selectbox("Aktif Ekip Seç", list(st.session_state.ekipler.keys()))
-st.session_state.aktif_ekip = aktif_secim
+st.sidebar.markdown("---")
+st.sidebar.subheader("🧩 Şehir Ekle")
 
-# Başlangıç Adresi Girişi
-st.sidebar.subheader("📍 Başlangıç Noktası")
-if not st.session_state.baslangic_konum:
-    adres_input = st.sidebar.text_input("Manuel Adres Girin (1 kez girilir)")
-    if st.sidebar.button("✅ Adres Onayla") and adres_input:
-        try:
-            sonuc = gmaps.geocode(adres_input)
-            if sonuc:
-                st.session_state.baslangic_konum = sonuc[0]["geometry"]["location"]
-                st.sidebar.success("Başlangıç noktası belirlendi.")
-            else:
-                st.sidebar.error("Adres bulunamadı.")
-        except:
-            st.sidebar.error("API Hatası.")
+if "sehir_listesi" not in st.session_state:
+    st.session_state.sehir_listesi = []
 
-# Üye Ekle
-with st.sidebar.expander("👤 Ekip Üyeleri"):
-    uye_adi = st.text_input("Yeni Üye Adı")
-    if st.button("✅ Üye Ekle") and uye_adi:
-        st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
+sehir_adi = st.sidebar.text_input("Şehir Adı")
+is_suresi = st.sidebar.number_input("İş Süresi (saat)", min_value=0.0, value=2.0)
+onem = st.sidebar.slider("Önem Derecesi", 1, 10, 5)
+latitude = st.sidebar.number_input("Enlem (lat)", value=0.0)
+longitude = st.sidebar.number_input("Boylam (lon)", value=0.0)
 
-    for i, uye in enumerate(st.session_state.ekipler[st.session_state.aktif_ekip]["members"]):
-        st.markdown(f"- {uye}")
+if st.sidebar.button("➕ Şehir Ekle"):
+    if sehir_adi and latitude and longitude:
+        st.session_state.sehir_listesi.append({
+            "name": sehir_adi,
+            "lat": latitude,
+            "lon": longitude,
+            "is_suresi": is_suresi,
+            "onem": onem
+        })
 
-# Şehir/Bayi Ekleme
-st.subheader("📌 Şehir Ekle")
-with st.form("sehir_form"):
-    sehir_adi = st.text_input("Şehir / Bayi Adı")
-    onem = st.slider("Önem Derecesi", 1, 5, 3)
-    is_suresi = st.number_input("Montaj Süresi (saat)", 1, 24, 2)
-    ekle_btn = st.form_submit_button("➕ Şehir Ekle")
-    if ekle_btn:
-        sonuc = gmaps.geocode(sehir_adi)
-        if sonuc:
-            konum = sonuc[0]["geometry"]["location"]
-            st.session_state.sehirler.append({
-                "sehir": sehir_adi,
-                "konum": konum,
-                "onem": onem,
-                "is_suresi": is_suresi
-            })
-            st.success(f"{sehir_adi} eklendi.")
+# Rota türü seçimi
+rota_turu = st.radio("Rota Sıralama Kriteri", ["En Kısa Yol", "Önem Sırasına Göre"])
+
+# Başlangıç konumu koordinatını bul
+import requests
+import urllib.parse
+
+def adres_to_koordinat(adres):
+    try:
+        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(adres)}&format=json&limit=1"
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        data = response.json()
+        if data:
+            return float(data[0]['lat']), float(data[0]['lon'])
+    except:
+        return 0.0, 0.0
+
+baslangic_lat, baslangic_lon = adres_to_koordinat(baslangic_noktasi)
+
+# Rota hesaplama
+sehirler = st.session_state.sehir_listesi.copy()
+rota = []
+visited = set()
+konum = (baslangic_lat, baslangic_lon)
+
+def rota_optimize(sehirler, konum, kriter):
+    rota = []
+    ziyaret_edilen = set()
+    while len(rota) < len(sehirler):
+        kalanlar = [s for s in sehirler if s['name'] not in ziyaret_edilen]
+        if not kalanlar:
+            break
+
+        if kriter == "En Kısa Yol":
+            secilen = min(kalanlar, key=lambda s: haversine(konum, (s['lat'], s['lon'])))
         else:
-            st.error("Konum bulunamadı.")
+            secilen = max(kalanlar, key=lambda s: s['onem'])
 
-# Rota ve Hesaplama
-if st.session_state.baslangic_konum and st.session_state.sehirler:
-    baslangic = st.session_state.baslangic_konum
-    sehirler = st.session_state.sehirler.copy()
+        rota.append(secilen)
+        ziyaret_edilen.add(secilen['name'])
+        konum = (secilen['lat'], secilen['lon'])
 
-    # Rota sıralama
-    if siralama_tipi == "Önem Derecesi":
-        sehirler.sort(key=lambda x: x["onem"], reverse=True)
-    else:  # En kısa rota (basit nearest neighbor)
-        rota = []
-        current = baslangic
-        while sehirler:
-            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])) )
-            rota.append(en_yakin)
-            current = en_yakin["konum"]
-            sehirler.remove(en_yakin)
-        sehirler = rota
+    return rota
 
-    # Harita
-    harita = folium.Map(location=[baslangic["lat"], baslangic["lng"]], zoom_start=6)
-    toplam_km = 0
-    toplam_sure = 0
-    toplam_iscilik = 0
-    toplam_yakit = 0
-    toplam_maliyet = 0
+rota = rota_optimize(sehirler, konum, rota_turu)
 
-    konumlar = [baslangic] + [s["konum"] for s in sehirler]
-    for i in range(len(konumlar) - 1):
-        yol = gmaps.directions(
-            (konumlar[i]["lat"], konumlar[i]["lng"]),
-            (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]),
-            mode="driving"
-        )
-        if yol:
-            km = yol[0]["legs"][0]["distance"]["value"] / 1000  # km olarak mesafe
-            sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60  # dakika cinsinden süre
-            toplam_km += km
-            toplam_sure += sure_dk
-            yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
-            toplam_yakit += yakit_maliyeti
-            montaj_suresi = st.session_state.sehirler[i]["is_suresi"]
-            toplam_iscilik += montaj_suresi * SAATLIK_ISCILIK
-            toplam_maliyet += yakit_maliyeti + (montaj_suresi * SAATLIK_ISCILIK)
+# Harita oluşturma
+m = folium.Map(location=[baslangic_lat, baslangic_lon], zoom_start=6)
+folium.Marker([baslangic_lat, baslangic_lon], tooltip="Başlangıç", icon=folium.Icon(color="green")).add_to(m)
 
-            folium.Marker(
-                location=[konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]],
-                popup=f"{i+1}. {st.session_state.sehirler[i]['sehir']}<br>İşçilik: {round(montaj_suresi * SAATLIK_ISCILIK, 2)} TL<br>Yakıt: {round(yakit_maliyeti, 2)} TL",
-                tooltip=f"{round(km)} km, {round(sure_dk)} dk"
-            ).add_to(harita)
+marker_cluster = MarkerCluster().add_to(m)
 
-    toplam_sure_td = timedelta(minutes=toplam_sure)
+toplam_km = 0
+toplam_yakit = 0
+toplam_iscilik = 0
+sehir_ozet_listesi = []
 
-    # Rota Haritası
-    st.subheader("🗺️ Rota Haritası")
-    st_folium(harita, width=1000, height=600)
+onceki_konum = (baslangic_lat, baslangic_lon)
 
-    st.markdown("---")
-    st.subheader("📊 Rota Özeti")
-    st.markdown(f"**Toplam Mesafe:** {round(toplam_km, 1)} km")
-    st.markdown(f"**Toplam Süre:** {toplam_sure_td}")
-    st.markdown(f"**Yakıt Maliyeti:** {round(toplam_yakit)} TL")
-    st.markdown(f"**İşçilik Maliyeti:** {round(toplam_iscilik)} TL")
-    st.markdown(f"**Toplam Maliyet:** {round(toplam_maliyet)} TL")
+for idx, sehir in enumerate(rota, start=1):
+    konum = (sehir['lat'], sehir['lon'])
+    km = haversine(onceki_konum, konum)
+    sure = km / 80  # ortalama hız varsayımı
 
-else:
-    st.info("Lütfen başlangıç adresi ve en az 1 şehir girin.")
+    yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
+    iscilik_maliyeti = sehir['is_suresi'] * SAATLIK_ISCILIK
+    toplam_maliyet = yakit_maliyeti + iscilik_maliyeti
+
+    toplam_km += km
+    toplam_yakit += yakit_maliyeti
+    toplam_iscilik += iscilik_maliyeti
+
+    folium.Marker(
+        location=konum,
+        tooltip=f"{idx}. {sehir['name']}",
+        popup=f"{sehir['name']}<br>Süre: {round(sure, 2)} saat<br>Mesafe: {round(km, 1)} km<br>İşçilik: {round(iscilik_maliyeti)} TL<br>Yakıt: {round(yakit_maliyeti)} TL",
+        icon=folium.DivIcon(html=f"<div style='font-size: 12pt; color: red'><b>{idx}</b></div>")
+    ).add_to(marker_cluster)
+
+    folium.PolyLine([onceki_konum, konum], color="blue", weight=2.5, tooltip=f"{round(km, 1)} km / {round(sure, 2)} saat").add_to(m)
+
+    sehir_ozet_listesi.append({
+        "Şehir": sehir['name'],
+        "Mesafe (km)": round(km, 1),
+        "Süre (saat)": round(sure, 2),
+        "İşçilik (TL)": round(iscilik_maliyeti),
+        "Yakıt (TL)": round(yakit_maliyeti),
+        "Toplam Maliyet (TL)": round(toplam_maliyet)
+    })
+
+    onceki_konum = konum
+
+# Geri dönüş
+km_donus = haversine(onceki_konum, (baslangic_lat, baslangic_lon))
+sure_donus = km_donus / 80
+yakit_donus = km_donus * km_basi_tuketim * benzin_fiyati
+toplam_km += km_donus
+toplam_yakit += yakit_donus
+
+folium.PolyLine([onceki_konum, (baslangic_lat, baslangic_lon)], color="gray", dash_array="5,5").add_to(m)
+
+st.subheader("🗺️ Harita ve Rota")
+st_data = st_folium(m, width=1000, height=600)
+
+st.subheader("📋 Şehir Bazlı Maliyet Detayları")
+st.table(sehir_ozet_listesi)
+
+st.subheader("📊 Toplam Rota Özeti")
+st.markdown(f"**Toplam Mesafe:** {round(toplam_km, 1)} km")
+st.markdown(f"**Toplam Yakıt Maliyeti:** {round(toplam_yakit)} TL")
+st.markdown(f"**Toplam İşçilik Maliyeti:** {round(toplam_iscilik)} TL")
+st.markdown(f"**Toplam Maliyet:** {round(toplam_iscilik + toplam_yakit)} TL")
