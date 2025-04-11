@@ -3,6 +3,7 @@ import googlemaps
 import folium
 from streamlit_folium import st_folium
 from datetime import timedelta
+from haversine import haversine
 
 # Google Maps API Anahtarınızı girin
 gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
@@ -11,13 +12,10 @@ st.set_page_config("Montaj Rota Planlayıcı", layout="wide")
 st.title("🛠️ Montaj Rota Planlayıcı")
 
 # GLOBAL Sabitler
-st.sidebar.header("🔧 Ayarlar")
+SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", value=500, min_value=100)
 benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/L)", 10.0)
 km_basi_tuketim = st.sidebar.number_input("Km Başına Tüketim (L/km)", 0.1)
 siralama_tipi = st.sidebar.radio("Rota Sıralama Tipi", ["Önem Derecesi", "En Kısa Rota"])
-
-# İşçilik Ücreti
-SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", 500, min_value=100)
 
 # Session Init
 if "ekipler" not in st.session_state:
@@ -93,11 +91,10 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     if siralama_tipi == "Önem Derecesi":
         sehirler.sort(key=lambda x: x["onem"], reverse=True)
     else:  # En kısa rota (basit nearest neighbor)
-        from geopy.distance import geodesic
         rota = []
         current = baslangic
         while sehirler:
-            en_yakin = min(sehirler, key=lambda x: geodesic((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])).km)
+            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])) )
             rota.append(en_yakin)
             current = en_yakin["konum"]
             sehirler.remove(en_yakin)
