@@ -3,7 +3,6 @@ import googlemaps
 import folium
 from streamlit_folium import st_folium
 from datetime import timedelta
-from haversine import haversine
 
 # Google Maps API Anahtarınızı girin
 gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
@@ -12,11 +11,13 @@ st.set_page_config("Montaj Rota Planlayıcı", layout="wide")
 st.title("🛠️ Montaj Rota Planlayıcı")
 
 # GLOBAL Sabitler
-SAATLIK_ISCILIK = 500  # TL
 st.sidebar.header("🔧 Ayarlar")
 benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/L)", 10.0)
 km_basi_tuketim = st.sidebar.number_input("Km Başına Tüketim (L/km)", 0.1)
 siralama_tipi = st.sidebar.radio("Rota Sıralama Tipi", ["Önem Derecesi", "En Kısa Rota"])
+
+# İşçilik Ücreti
+SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", 500, min_value=100)
 
 # Session Init
 if "ekipler" not in st.session_state:
@@ -35,9 +36,6 @@ if st.sidebar.button("➕ Ekip Oluştur") and ekip_adi:
     if ekip_adi not in st.session_state.ekipler:
         st.session_state.ekipler[ekip_adi] = {"members": []}
         st.session_state.aktif_ekip = ekip_adi
-        st.sidebar.success(f"{ekip_adi} ekibi oluşturuldu.")
-
-# Aktif Ekip Seçimi
 aktif_secim = st.sidebar.selectbox("Aktif Ekip Seç", list(st.session_state.ekipler.keys()))
 st.session_state.aktif_ekip = aktif_secim
 
@@ -60,10 +58,9 @@ if not st.session_state.baslangic_konum:
 with st.sidebar.expander("👤 Ekip Üyeleri"):
     uye_adi = st.text_input("Yeni Üye Adı")
     if st.button("✅ Üye Ekle") and uye_adi:
-        if st.session_state.aktif_ekip:
-            st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
+        st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
 
-    for i, uye in enumerate(st.session_state.ekipler.get(st.session_state.aktif_ekip, {}).get("members", [])):
+    for i, uye in enumerate(st.session_state.ekipler[st.session_state.aktif_ekip]["members"]):
         st.markdown(f"- {uye}")
 
 # Şehir/Bayi Ekleme
@@ -96,10 +93,11 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     if siralama_tipi == "Önem Derecesi":
         sehirler.sort(key=lambda x: x["onem"], reverse=True)
     else:  # En kısa rota (basit nearest neighbor)
+        from geopy.distance import geodesic
         rota = []
         current = baslangic
         while sehirler:
-            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])) )
+            en_yakin = min(sehirler, key=lambda x: geodesic((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])).km)
             rota.append(en_yakin)
             current = en_yakin["konum"]
             sehirler.remove(en_yakin)
