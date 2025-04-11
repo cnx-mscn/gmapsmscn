@@ -50,18 +50,20 @@ with st.sidebar.expander("👤 Ekip Üyeleri"):
 
 # Başlangıç Adresi Girişi
 st.sidebar.subheader("📍 Başlangıç Noktası")
-if not st.session_state.baslangic_konum:
-    adres_input = st.sidebar.text_input("Manuel Adres Girin (1 kez girilir)")
-    if st.sidebar.button("✅ Adres Onayla") and adres_input:
+adres_input = st.sidebar.text_input("Başlangıç Noktasını Girin", st.session_state.baslangic_konum if st.session_state.baslangic_konum else "")
+if st.sidebar.button("✅ Başlangıç Noktasını Güncelle"):
+    if adres_input:
         try:
             sonuc = gmaps.geocode(adres_input)
             if sonuc:
                 st.session_state.baslangic_konum = sonuc[0]["geometry"]["location"]
-                st.sidebar.success("Başlangıç noktası belirlendi.")
+                st.sidebar.success("Başlangıç noktası başarıyla güncellendi.")
             else:
                 st.sidebar.error("Adres bulunamadı.")
         except:
             st.sidebar.error("API Hatası.")
+else:
+    st.sidebar.warning("Başlangıç noktası henüz girilmedi.")
 
 # Şehir/Bayi Ekleme
 st.subheader("📌 Şehir Ekle")
@@ -154,11 +156,32 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
 
     st.markdown("---")
     st.subheader("📊 Rota Özeti")
-    st.markdown(f"**Toplam Mesafe:** {round(toplam_km, 1)} km")
-    st.markdown(f"**Toplam Süre:** {toplam_sure_td}")
-    st.markdown(f"**Yakıt Maliyeti:** {round(toplam_yakit)} TL")
-    st.markdown(f"**İşçilik Maliyeti:** {round(toplam_iscilik)} TL")
-    st.markdown(f"**Toplam Maliyet:** {round(toplam_maliyet)} TL")
+    for i, sehir in enumerate(st.session_state.sehirler):
+        sehir_km = gmaps.directions(
+            (baslangic["lat"], baslangic["lng"]),
+            (sehir["konum"]["lat"], sehir["konum"]["lng"]),
+            mode="driving"
+        )[0]["legs"][0]["distance"]["value"] / 1000
+        sehir_sure = gmaps.directions(
+            (baslangic["lat"], baslangic["lng"]),
+            (sehir["konum"]["lat"], sehir["konum"]["lng"]),
+            mode="driving"
+        )[0]["legs"][0]["duration"]["value"] / 60
+        sehir_yakit = sehir_km * km_basi_tuketim * benzin_fiyati
+        sehir_iscilik = sehir["is_suresi"] * SAATLIK_ISCILIK
+
+        st.markdown(f"**{sehir['sehir']}**")
+        st.markdown(f"  - **Mesafe**: {round(sehir_km)} km")
+        st.markdown(f"  - **Süre**: {round(sehir_sure)} dk")
+        st.markdown(f"  - **Yakıt Maliyeti**: {round(sehir_yakit)} TL")
+        st.markdown(f"  - **İşçilik Maliyeti**: {round(sehir_iscilik)} TL")
+
+    st.markdown("---")
+    st.markdown(f"**Toplam Mesafe**: {round(toplam_km, 1)} km")
+    st.markdown(f"**Toplam Süre**: {toplam_sure_td}")
+    st.markdown(f"**Toplam Yakıt Maliyeti**: {round(toplam_yakit)} TL")
+    st.markdown(f"**Toplam İşçilik Maliyeti**: {round(toplam_iscilik)} TL")
+    st.markdown(f"**Toplam Maliyet**: {round(toplam_maliyet)} TL")
 
 else:
     st.info("Lütfen başlangıç adresi ve en az 1 şehir girin.")
