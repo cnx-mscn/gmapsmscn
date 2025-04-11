@@ -37,6 +37,17 @@ if st.sidebar.button("➕ Ekip Oluştur") and ekip_adi:
 aktif_secim = st.sidebar.selectbox("Aktif Ekip Seç", list(st.session_state.ekipler.keys()))
 st.session_state.aktif_ekip = aktif_secim
 
+# Üye Ekle
+with st.sidebar.expander("👤 Ekip Üyeleri"):
+    uye_adi = st.text_input("Yeni Üye Adı")
+    if st.button("✅ Üye Ekle") and uye_adi:
+        if st.session_state.aktif_ekip:
+            st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
+        else:
+            st.session_state.ekipler[st.session_state.aktif_ekip] = {"members": [uye_adi]}
+    for i, uye in enumerate(st.session_state.ekipler[st.session_state.aktif_ekip].get("members", [])):
+        st.markdown(f"- {uye}")
+
 # Başlangıç Adresi Girişi
 st.sidebar.subheader("📍 Başlangıç Noktası")
 if not st.session_state.baslangic_konum:
@@ -51,15 +62,6 @@ if not st.session_state.baslangic_konum:
                 st.sidebar.error("Adres bulunamadı.")
         except:
             st.sidebar.error("API Hatası.")
-
-# Üye Ekle
-with st.sidebar.expander("👤 Ekip Üyeleri"):
-    uye_adi = st.text_input("Yeni Üye Adı")
-    if st.button("✅ Üye Ekle") and uye_adi:
-        st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
-
-    for i, uye in enumerate(st.session_state.ekipler[st.session_state.aktif_ekip]["members"]):
-        st.markdown(f"- {uye}")
 
 # Şehir/Bayi Ekleme
 st.subheader("📌 Şehir Ekle")
@@ -127,7 +129,7 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
             folium.Marker(
                 location=[konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]],
                 popup=f"{i+1}. {st.session_state.sehirler[i]['sehir']}",
-                tooltip=f"{round(km)} km, {round(sure_dk)} dk"
+                tooltip=f"{i+1}. {st.session_state.sehirler[i]['sehir']} - {round(km)} km, {round(sure_dk)} dk"
             ).add_to(harita)
 
     toplam_sure_td = timedelta(minutes=toplam_sure)
