@@ -11,9 +11,9 @@ st.set_page_config("Montaj Rota Planlayıcı", layout="wide")
 st.title("🛠️ Montaj Rota Planlayıcı")
 
 # GLOBAL Sabitler
-SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", 500, min_value=100)
-benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/L)", 10.0)
-km_basi_tuketim = st.sidebar.number_input("Km Başına Tüketim (L/km)", 0.1)
+SAATLIK_ISCILIK = st.sidebar.number_input("Saatlik İşçilik Ücreti (TL)", min_value=100, value=500, step=50)
+benzin_fiyati = st.sidebar.number_input("Benzin Fiyatı (TL/L)", min_value=0.1, value=10.0, step=0.1)
+km_basi_tuketim = st.sidebar.number_input("Km Başına Tüketim (L/km)", min_value=0.01, value=0.1, step=0.01)
 siralama_tipi = st.sidebar.radio("Rota Sıralama Tipi", ["Önem Derecesi", "En Kısa Rota"])
 
 # Session Init
