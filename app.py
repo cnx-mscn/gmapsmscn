@@ -3,6 +3,7 @@ import googlemaps
 import folium
 from streamlit_folium import st_folium
 from datetime import timedelta
+from haversine import haversine
 
 # Google Maps API Anahtarınızı girin
 gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
@@ -34,6 +35,9 @@ if st.sidebar.button("➕ Ekip Oluştur") and ekip_adi:
     if ekip_adi not in st.session_state.ekipler:
         st.session_state.ekipler[ekip_adi] = {"members": []}
         st.session_state.aktif_ekip = ekip_adi
+        st.sidebar.success(f"{ekip_adi} ekibi oluşturuldu.")
+
+# Aktif Ekip Seçimi
 aktif_secim = st.sidebar.selectbox("Aktif Ekip Seç", list(st.session_state.ekipler.keys()))
 st.session_state.aktif_ekip = aktif_secim
 
@@ -56,9 +60,10 @@ if not st.session_state.baslangic_konum:
 with st.sidebar.expander("👤 Ekip Üyeleri"):
     uye_adi = st.text_input("Yeni Üye Adı")
     if st.button("✅ Üye Ekle") and uye_adi:
-        st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
+        if st.session_state.aktif_ekip:
+            st.session_state.ekipler[st.session_state.aktif_ekip]["members"].append(uye_adi)
 
-    for i, uye in enumerate(st.session_state.ekipler[st.session_state.aktif_ekip]["members"]):
+    for i, uye in enumerate(st.session_state.ekipler.get(st.session_state.aktif_ekip, {}).get("members", [])):
         st.markdown(f"- {uye}")
 
 # Şehir/Bayi Ekleme
@@ -91,11 +96,10 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     if siralama_tipi == "Önem Derecesi":
         sehirler.sort(key=lambda x: x["onem"], reverse=True)
     else:  # En kısa rota (basit nearest neighbor)
-        from haversine import haversine
         rota = []
         current = baslangic
         while sehirler:
-            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])))
+            en_yakin = min(sehirler, key=lambda x: haversine((current["lat"], current["lng"]), (x["konum"]["lat"], x["konum"]["lng"])) )
             rota.append(en_yakin)
             current = en_yakin["konum"]
             sehirler.remove(en_yakin)
@@ -131,4 +135,19 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
                 tooltip=f"{round(km)} km, {round(sure_dk)} dk"
             ).add_to(harita)
 
-    toplam_sure_td
+    toplam_sure_td = timedelta(minutes=toplam_sure)
+    toplam_maliyet = toplam_yakit + toplam_iscilik
+
+    st.subheader("🗺️ Rota Haritası")
+    st_folium(harita, width=1000, height=600)
+
+    st.markdown("---")
+    st.subheader("📊 Rota Özeti")
+    st.markdown(f"**Toplam Mesafe:** {round(toplam_km, 1)} km")
+    st.markdown(f"**Toplam Süre:** {toplam_sure_td}")
+    st.markdown(f"**Yakıt Maliyeti:** {round(toplam_yakit)} TL")
+    st.markdown(f"**İşçilik Maliyeti:** {round(toplam_iscilik)} TL")
+    st.markdown(f"**Toplam Maliyet:** {round(toplam_maliyet)} TL")
+
+else:
+    st.info("Lütfen başlangıç adresi ve en az 1 şehir girin.")
