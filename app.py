@@ -192,23 +192,18 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
         icon=folium.Icon(color="green")
     ).add_to(harita)
 
-    # Her şehir için marker ekle ve maliyet bilgisi göster
-    for sehir in rota[1:]:  # Başlangıç noktasını hariç tutarak ekliyoruz
+    # Rota üzerindeki şehirlere işaretçi ekle
+    for sehir in rota:
         folium.Marker(
             location=[sehir["lat"], sehir["lng"]],
-            popup=f"{sehir['name']}<br>İşçilik: {round(sehir['is_suresi'] * SAATLIK_ISCILIK, 2)} TL<br>Yakıt: {round(km * km_basi_tuketim * benzin_fiyati, 2)} TL"
+            popup=f"{sehir['name']}<br>İşçilik: {round(sehir['is_suresi'] * SAATLIK_ISCILIK, 2)} TL<br>Yakıt: {round(km * km_basi_tuketim * benzin_fiyati, 2)} TL",
+            icon=folium.Icon(color="blue")
         ).add_to(harita)
 
-    st.subheader("🗺️ Rota Haritası")
-    st_folium(harita, width=1000, height=600)
+    # Sonuçları göster
+    st.subheader(f"Toplam Maliyet: {round(toplam_maliyet, 2)} TL")
+    st.subheader(f"Toplam Mesafe: {round(toplam_km, 2)} km")
+    st.subheader(f"Toplam Süre: {toplam_sure_td}")
 
-    st.markdown("---")
-    st.subheader("📊 Rota Özeti")
-    st.markdown(f"**Toplam Mesafe**: {round(toplam_km, 1)} km")
-    st.markdown(f"**Toplam Süre**: {toplam_sure_td}")
-    st.markdown(f"**Toplam Yakıt Maliyeti**: {round(toplam_yakit)} TL")
-    st.markdown(f"**Toplam İşçilik Maliyeti**: {round(toplam_iscilik)} TL")
-    st.markdown(f"**Toplam Maliyet**: {round(toplam_maliyet)} TL")
-
-else:
-    st.info("Lütfen başlangıç adresi ve en az 1 şehir girin.")
+    # Haritayı görüntüle
+    st_folium(harita, width=700)
