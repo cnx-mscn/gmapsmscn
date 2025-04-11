@@ -126,10 +126,24 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
             montaj_suresi = st.session_state.sehirler[i]["is_suresi"]
             toplam_iscilik += montaj_suresi * SAATLIK_ISCILIK
 
+            # PolyLine: yol çizgisi
+            folium.PolyLine(
+                locations=[(konumlar[i]["lat"], konumlar[i]["lng"]), (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"])],
+                color="blue", weight=2.5, opacity=1
+            ).add_to(harita)
+
+            # Marker: şehir yerini işaretle ve yol bilgisi ekle
             folium.Marker(
                 location=[konumlar[i + 1]["lat"], konumlar[i + 1]["lng"]],
                 popup=f"{i+1}. {st.session_state.sehirler[i]['sehir']}",
                 tooltip=f"{i+1}. {st.session_state.sehirler[i]['sehir']} - {round(km)} km, {round(sure_dk)} dk"
+            ).add_to(harita)
+
+            # Yol üzerine km ve süre bilgisi ekle
+            yol_punkturu = [(konumlar[i]["lat"], konumlar[i]["lng"]), (konumlar[i + 1]["lat"], konumlar[i + 1]["lng"])]
+            folium.Marker(
+                location=[(konumlar[i]["lat"] + konumlar[i + 1]["lat"]) / 2, (konumlar[i]["lng"] + konumlar[i + 1]["lng"]) / 2],
+                icon=folium.DivIcon(html=f"<div>{round(km)} km<br>{round(sure_dk)} dk</div>")
             ).add_to(harita)
 
     toplam_sure_td = timedelta(minutes=toplam_sure)
