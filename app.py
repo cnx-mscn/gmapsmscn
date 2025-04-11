@@ -99,34 +99,63 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
     toplam_yakit = 0
     toplam_maliyet = 0
 
-    while sehirler:
-        # En yakın şehri seç
-        en_yakin_sehir = min(sehirler, key=lambda s: haversine(
-            (rota[-1]["lat"], rota[-1]["lng"]), (s["konum"]["lat"], s["konum"]["lng"])))
-        
-        # Gidiş yolu mesafesi ve süre
-        yol = gmaps.directions(
-            (rota[-1]["lat"], rota[-1]["lng"]),
-            (en_yakin_sehir["konum"]["lat"], en_yakin_sehir["konum"]["lng"]),
-            mode="driving"
-        )
-        if yol:
-            km = yol[0]["legs"][0]["distance"]["value"] / 1000
-            sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60
-            yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
-            montaj_suresi = en_yakin_sehir["is_suresi"] * SAATLIK_ISCILIK
+    # En kısa rota veya önem derecesine göre sıralama
+    if siralama_tipi == "En Kısa Rota":
+        # En yakın şehirleri sıralamak
+        while sehirler:
+            en_yakin_sehir = min(sehirler, key=lambda s: haversine(
+                (rota[-1]["lat"], rota[-1]["lng"]), (s["konum"]["lat"], s["konum"]["lng"])))
+            
+            # Gidiş yolu mesafesi ve süre
+            yol = gmaps.directions(
+                (rota[-1]["lat"], rota[-1]["lng"]),
+                (en_yakin_sehir["konum"]["lat"], en_yakin_sehir["konum"]["lng"]),
+                mode="driving"
+            )
+            if yol:
+                km = yol[0]["legs"][0]["distance"]["value"] / 1000
+                sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60
+                yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
+                montaj_suresi = en_yakin_sehir["is_suresi"] * SAATLIK_ISCILIK
 
-            toplam_km += km
-            toplam_sure += sure_dk
-            toplam_yakit += yakit_maliyeti
-            toplam_iscilik += montaj_suresi
+                toplam_km += km
+                toplam_sure += sure_dk
+                toplam_yakit += yakit_maliyeti
+                toplam_iscilik += montaj_suresi
 
-            rota.append({
-                "lat": en_yakin_sehir["konum"]["lat"], 
-                "lng": en_yakin_sehir["konum"]["lng"], 
-                "name": en_yakin_sehir["sehir"]
-            })  # Şehri rotaya ekle
-            sehirler.remove(en_yakin_sehir)
+                rota.append({
+                    "lat": en_yakin_sehir["konum"]["lat"], 
+                    "lng": en_yakin_sehir["konum"]["lng"], 
+                    "name": en_yakin_sehir["sehir"]
+                })  # Şehri rotaya ekle
+                sehirler.remove(en_yakin_sehir)
+
+    elif siralama_tipi == "Önem Derecesi":
+        # Öncelikli şehirleri sıralamak
+        sehirler = sorted(sehirler, key=lambda s: s["onem"])
+
+        for sehir in sehirler:
+            yol = gmaps.directions(
+                (rota[-1]["lat"], rota[-1]["lng"]),
+                (sehir["konum"]["lat"], sehir["konum"]["lng"]),
+                mode="driving"
+            )
+            if yol:
+                km = yol[0]["legs"][0]["distance"]["value"] / 1000
+                sure_dk = yol[0]["legs"][0]["duration"]["value"] / 60
+                yakit_maliyeti = km * km_basi_tuketim * benzin_fiyati
+                montaj_suresi = sehir["is_suresi"] * SAATLIK_ISCILIK
+
+                toplam_km += km
+                toplam_sure += sure_dk
+                toplam_yakit += yakit_maliyeti
+                toplam_iscilik += montaj_suresi
+
+                rota.append({
+                    "lat": sehir["konum"]["lat"], 
+                    "lng": sehir["konum"]["lng"], 
+                    "name": sehir["sehir"]
+                })  # Şehri rotaya ekle
 
     # Dönüş yolunu ekle
     yol = gmaps.directions(
@@ -163,11 +192,11 @@ if st.session_state.baslangic_konum and st.session_state.sehirler:
         icon=folium.Icon(color="green")
     ).add_to(harita)
 
-    # Her şehir için marker ekle
+    # Her şehir için marker ekle ve maliyet bilgisi göster
     for sehir in rota[1:]:  # Başlangıç noktasını hariç tutarak ekliyoruz
         folium.Marker(
             location=[sehir["lat"], sehir["lng"]],
-            popup=sehir["name"]
+            popup=f"{sehir['name']}<br>İşçilik: {round(sehir['is_suresi'] * SAATLIK_ISCILIK, 2)} TL<br>Yakıt: {round(km * km_basi_tuketim * benzin_fiyati, 2)} TL"
         ).add_to(harita)
 
     st.subheader("🗺️ Rota Haritası")
