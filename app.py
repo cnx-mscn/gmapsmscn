@@ -4,6 +4,21 @@ import folium
 from streamlit_folium import st_folium
 from datetime import timedelta
 from haversine import haversine
+import streamlit_authenticator as stauth
+
+# Kullanıcıları tanımlayın (Bu örnek için statik, ancak bir veritabanına bağlanarak dinamik hale getirebilirsiniz)
+usernames = ["admin", "user1", "user2"]
+passwords = ["admin123", "password1", "password2"]
+names = ["Admin", "User One", "User Two"]
+
+# Şifreli giriş
+authenticator = stauth.Authenticate(names, usernames, passwords, cookie_name="montaj_erp", key="key", cookie_expiry_days=30)
+name, authentication_status = authenticator.login("Login", "main")
+
+if authentication_status:
+    st.write(f"Welcome {name}!")
+else:
+    st.warning("Please log in to access the system.")
 
 # Google Maps API Anahtarınızı girin
 gmaps = googlemaps.Client(key="AIzaSyDwQVuPcON3rGSibcBrwhxQvz4HLTpF9Ws")
